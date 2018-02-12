@@ -1,3 +1,7 @@
 DB_CONFIG_FILE = '.wrh.db.config'
 DEFAULT_ENGINE_PORT = 8000
 DEFAULT_TORNADO_PORT = 8888
+ARGS_PORT = 'port'
+ARGS_TORNADO_PORT = 'tornado_port'
+ARGS_PATH = 'path'
+ARGS_INTERACTIVE = 'interactive'
