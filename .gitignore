@@ -185,4 +185,6 @@ fabric.properties
 
 .idea/
 .idea/*
+utils/
+utils/*
 .wrh.db.config
