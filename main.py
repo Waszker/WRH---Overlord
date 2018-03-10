@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.6
 import argparse
 import os
 import sys
@@ -18,18 +18,18 @@ def parse_args(args):
                         help='whether system should start in interactive mode')
     pargs = parser.parse_args(args)
     return {ARGS_PORT: pargs.port or DEFAULT_ENGINE_PORT, ARGS_TORNADO_PORT: pargs.tornado_port or DEFAULT_TORNADO_PORT,
-            ARGS_PATH: pargs.path or os.os.getcwd(), ARGS_INTERACTIVE: pargs.interactive or False}
+            ARGS_PATH: pargs.path or os.getcwd(), ARGS_INTERACTIVE: pargs.interactive or False}
 
 
 if __name__ == '__main__':
     try:
         parsed = parse_args(sys.argv[1:])
         os.chdir(parsed[ARGS_PATH])
-        engine = DBEngine(parsed[ARGS_PORT])
+        engine = DBEngine(parsed[ARGS_PORT], parsed[ARGS_TORNADO_PORT])
         if parsed[ARGS_INTERACTIVE]:
             engine.run_interactive()
         else:
-            engine.start_work(parsed[ARGS_TORNADO_PORT])
+            engine.start_work()
     except Exception as e:
         log(e, Color.FAIL)
         raise

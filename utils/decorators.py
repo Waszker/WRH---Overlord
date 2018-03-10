@@ -21,7 +21,7 @@ def in_thread(method):
     return run_thread
 
 
-def with_open(filename, mode):
+def with_open(filename, mode, exceptions):
     """
     Runs provided method with additional named parameter being the requested, opened file object,
     located in wrh operating path.
@@ -31,6 +31,8 @@ def with_open(filename, mode):
     :type filename: str
     :param mode: mode in which file should be opened
     :type mode: str
+    :param exceptions: iterable of exceptions that should be treated as "expected"
+    :type exceptions: iterable
     """
 
     def inner(method):
@@ -40,7 +42,7 @@ def with_open(filename, mode):
                 with open(filename, mode) as f:
                     kwargs['_file_'] = f
                     return method(*args, **kwargs)
-            except IOError:
+            except exceptions:
                 pass
 
         return open_and_run

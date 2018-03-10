@@ -1,23 +1,31 @@
 import json
 import socket
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from db_engine import Base
 from db_engine.constants import DB_CONFIG_FILE
-from db_engine.wrh_clients import WRHClient
+from db_engine.wrh_client import WRHClient
 from utils.decorators import with_open, in_thread
-from utils.io import log, Color
+from utils.io import log, Color, wrh_input
 from utils.sockets import wait_bind_socket, await_connection
 
 
 class DBEngine:
-    def __init__(self, port):
+    def __init__(self, port, tornado_port):
         self.socket = None
         self.port = port
+        self.tornado_port = tornado_port
         self._should_end = False
-        self.wrh_clients = {}
-
         self._read_db_configuration()
 
-    def start_work(self, tornado_port):
+    @property
+    def wrh_clients(self):
+        clients = self.session.query(WRHClient).all()
+        return {c.token: c for c in clients}
+
+    def start_work(self):
         if not self.wrh_clients:
             log('No point in running while there are no clients configured!', Color.WARNING)
         else:
@@ -26,16 +34,30 @@ class DBEngine:
             # TODO: Stop everything
 
     def run_interactive(self):
-        # TODO: Run interactive procedures e.g. add/remove clients, etc.
-        pass
+        log('*** Existing clients ***')
+        [log('{client.id} --- {client.name}'.format(client=client), Color.BLUE) for client in self.wrh_clients.values()]
+        choices = {1: ('Add new WRH client', self._add_new_client),
+                   2: ('Edit existing WRH client', self._modify_client),
+                   3: ('Delete existing WRH client', self._delete_client),
+                   4: ('Start work', self.start_work), 5: ('Exit', lambda: None)}
+        choice = -1
+        while choice != 5:
+            [log('{}) {}'.format(k, v[0])) for k, v in choices.items()]
+            choice = wrh_input(message='> ', input_type=int, sanitizer=lambda x: 1 <= x <= len(choices),
+                               allowed_exceptions=(ValueError,))
+            choices[choice][1]()  # run selected procedure
 
-    @with_open(DB_CONFIG_FILE, 'r')
+    @with_open(DB_CONFIG_FILE, 'r', ())
     def _read_db_configuration(self, _file_=None):
         try:
-            configurations = json.loads(_file_.read())
-            self.wrh_clients = {c['token']: WRHClient(c) for c in configurations}
+            db_configuration = json.loads(_file_.read())
+            self.db_engine = create_engine('{dialect}://{username}:{password}@{host}:{port}/{database}'.format(
+                **db_configuration))
+            Base.metadata.create_all(self.db_engine)
+            self.session = sessionmaker(bind=self.db_engine)()
         except (IOError, KeyError) as e:
             log('Error when trying to read db configuration: {}'.format(e), Color.FAIL)
+            raise
 
     def _await_connections(self):
         predicate = lambda: self._should_end is False
@@ -56,3 +78,16 @@ class DBEngine:
         if wrh_client:
             wrh_client.save_measurement_to_db(measurement_data)
         connection.sendall('OK')
+
+    def _add_new_client(self):
+        log('\n*** Adding new WRH client ***')
+        client_name = wrh_input(message='Input name of new client: ')
+        client = WRHClient(name=client_name, token='Token')
+        self.session.add(client)
+        self.session.commit()
+
+    def _modify_client(self):
+        pass
+
+    def _delete_client(self):
+        pass
