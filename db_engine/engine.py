@@ -70,11 +70,11 @@ class DBEngine:
                                        error_message='Unable to bind to port {}'.format(self.port))
         if bind_result:
             self.socket.listen(5)
-            await_connection(self.socket, self._new_connection, predicate=predicate)
+            await_connection(self.socket, self._new_connection, predicate=predicate, close_connection=False)
 
     @in_thread
     def _new_connection(self, connection, address):
-        data = json.loads(connection.recv(4096))
+        data = json.loads(connection.recv(4096).decode('utf-8').replace('\0', ''))
         log('New connection from {} who sent: {}'.format(address, data))
         wrh_client = self.wrh_clients.get(data['token'])
         if wrh_client:
@@ -83,9 +83,10 @@ class DBEngine:
                                       module_id=data['module_id'],
                                       timestamp=datetime.strptime(data['date'], '%Y-%m-%d %H:%M:%S'),
                                       # e.g. 2017-01-01 12:00:00
-                                      data=json.loads(data['measurement']))
+                                      data=data['measurement'])
             self.session.add(measurement)
             self.session.commit()
+        connection.close()  # TODO: Await more data instead of closing?
 
     def _add_new_client(self):
         log('\n*** Adding new WRH client ***')

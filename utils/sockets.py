@@ -28,16 +28,18 @@ def wait_bind_socket(socket, host, port, sleep, retries=-1, predicate=lambda: Tr
     return predicate() and retries != 0
 
 
-def await_connection(socket, callback, predicate=lambda: True):
+def await_connection(socket, callback, predicate=lambda: True, close_connection=True):
     """
     Waits for connection on provided socket. Each connection results in firing provided
     callback function with the connection and client address as arguments.
+    Connection
     """
     while predicate():
         try:
             connection, address = socket.accept()
             callback(connection, address)
-            connection.close()
+            if close_connection:
+                connection.close()
         except s.error:
             pass
 
