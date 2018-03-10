@@ -2,6 +2,8 @@ import json
 import socket
 
 from datetime import datetime
+
+import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -9,8 +11,10 @@ from db_engine import Base
 from db_engine.constants import DB_CONFIG_FILE
 from db_engine.wrh_client import WRHClient, Measurement
 from utils.decorators import with_open, in_thread
-from utils.io import log, Color, wrh_input
+from utils.io import log, Color, wrh_input, non_empty_positive_numeric_input
 from utils.sockets import wait_bind_socket, await_connection
+
+npinput = non_empty_positive_numeric_input
 
 
 class DBEngine:
@@ -91,13 +95,26 @@ class DBEngine:
     def _add_new_client(self):
         log('\n*** Adding new WRH client ***')
         client_name = wrh_input(message='Input name of new client: ')
-        client = WRHClient(name=client_name, token='Token')
+        client = WRHClient(name=client_name, token=self._generate_client_token(client_name))
         self.session.add(client)
+        log('Sucess!\n\n', Color.GREEN)
 
     def _modify_client(self):
         # TODO: Finish this function
         pass
 
     def _delete_client(self):
-        # TODO: Finish this function
-        pass
+        log('\n*** Existing clients ***')
+        [log('{client.id} --- {client.name}'.format(client=client), Color.BLUE) for client in self.wrh_clients.values()]
+        client_id = npinput(message='Id of client to remove: ')
+        to_remove = self.session.query(WRHClient).filter(WRHClient.id == client_id).first()
+        if to_remove:
+            self.session.delete(to_remove)
+            self.session.commit()
+            log('Sucess!\n\n', Color.GREEN)
+
+    @staticmethod
+    def _generate_client_token(client_name):
+        return hashlib.sha256(
+            '{}{}'.format(client_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S')).encode('utf-8')
+        ).hexdigest()
