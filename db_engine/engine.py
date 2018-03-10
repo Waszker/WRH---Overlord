@@ -1,12 +1,13 @@
 import json
 import socket
 
+from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db_engine import Base
 from db_engine.constants import DB_CONFIG_FILE
-from db_engine.wrh_client import WRHClient
+from db_engine.wrh_client import WRHClient, Measurement
 from utils.decorators import with_open, in_thread
 from utils.io import log, Color, wrh_input
 from utils.sockets import wait_bind_socket, await_connection
@@ -22,6 +23,7 @@ class DBEngine:
 
     @property
     def wrh_clients(self):
+        # TODO: Check if this is optimal way of obtaining client objects? Are those cached within session?
         clients = self.session.query(WRHClient).all()
         return {c.token: c for c in clients}
 
@@ -46,6 +48,7 @@ class DBEngine:
             choice = wrh_input(message='> ', input_type=int, sanitizer=lambda x: 1 <= x <= len(choices),
                                allowed_exceptions=(ValueError,))
             choices[choice][1]()  # run selected procedure
+            self.session.commit()
 
     @with_open(DB_CONFIG_FILE, 'r', ())
     def _read_db_configuration(self, _file_=None):
@@ -71,23 +74,29 @@ class DBEngine:
 
     @in_thread
     def _new_connection(self, connection, address):
-        data = connection.recv(4096)
-        log('New connection from {} who sent: {}'.format(address, connection))
-        client_token, measurement_data = data.split('|')
-        wrh_client = self.wrh_clients.get(client_token)
+        data = json.loads(connection.recv(4096))
+        log('New connection from {} who sent: {}'.format(address, data))
+        wrh_client = self.wrh_clients.get(data['token'])
         if wrh_client:
-            wrh_client.save_measurement_to_db(measurement_data)
-        connection.sendall('OK')
+            measurement = Measurement(client_id=wrh_client.id,
+                                      module_type=data['module_type'],
+                                      module_id=data['module_id'],
+                                      timestamp=datetime.strptime(data['date'], '%Y-%m-%d %H:%M:%S'),
+                                      # e.g. 2017-01-01 12:00:00
+                                      data=json.loads(data['measurement']))
+            self.session.add(measurement)
+            self.session.commit()
 
     def _add_new_client(self):
         log('\n*** Adding new WRH client ***')
         client_name = wrh_input(message='Input name of new client: ')
         client = WRHClient(name=client_name, token='Token')
         self.session.add(client)
-        self.session.commit()
 
     def _modify_client(self):
+        # TODO: Finish this function
         pass
 
     def _delete_client(self):
+        # TODO: Finish this function
         pass
