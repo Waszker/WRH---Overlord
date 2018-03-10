@@ -13,7 +13,7 @@ class WRHClient(Base):
     __tablename__ = 'wrh_client'
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    token = Column(String, nullable=False)
+    token = Column(String, nullable=False, unique=True)
     measurements = relationship("Measurement")
 
 
@@ -21,7 +21,7 @@ class Measurement(Base):
     __tablename__ = 'measurement'
     id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey('wrh_client.id'))
-    module_type = Column(Integer, nullable=False)
     module_id = Column(Integer, nullable=False)
     timestamp = Column(TIMESTAMP, nullable=False)
+    module_type = Column(String, nullable=False)
     data = Column(JSONB, nullable=False, server_default=text("'{}'"))
