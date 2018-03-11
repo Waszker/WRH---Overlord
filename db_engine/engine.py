@@ -8,10 +8,10 @@ import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from db_engine import Base
+from db_engine import Base, WRH_MODULES
 from db_engine.constants import DB_CONFIG_FILE
 from db_engine.models import WRHClient, Measurement, Module
-from utils.decorators import with_open, in_thread
+from utils.decorators import with_open, in_thread, ignore_exceptions
 from utils.io import log, Color, wrh_input, non_empty_positive_numeric_input
 from utils.sockets import wait_bind_socket, await_connection
 
@@ -24,6 +24,9 @@ class DBEngine:
         self.port = port
         self.tornado_port = tornado_port
         self._should_end = False
+        log('Following additional db models have been found: \n*{}'.format(
+            '\n*'.join(str(m.__name__) for m in WRH_MODULES)), Color.BLUE)
+        self.wrh_modules = {m.WRHID: m for m in WRH_MODULES}
         self._read_db_configuration()
 
     @property
@@ -63,6 +66,7 @@ class DBEngine:
     @with_open(DB_CONFIG_FILE, 'r', ())
     def _read_db_configuration(self, _file_=None):
         try:
+            log('Connecting to database')
             db_configuration = json.loads(_file_.read())
             self.db_engine = create_engine('{dialect}://{username}:{password}@{host}:{port}/{database}'.format(
                 **db_configuration))
@@ -89,14 +93,19 @@ class DBEngine:
         wrh_client = self.wrh_clients.get(data['token'])
         if wrh_client:
             self._update_module_info(wrh_client.id, data['module_id'], data['module_type'], data['module_name'])
-            measurement = Measurement(client_id=wrh_client.id,
-                                      module_id=data['module_id'],
-                                      timestamp=datetime.strptime(data['date'], '%Y-%m-%d %H:%M:%S'),
-                                      # e.g. 2017-01-01 12:00:00
-                                      data=data['measurement'])
-            self.session.add(measurement)
-            self.session.commit()
+            self._upload_new_measurement(wrh_client, data)
         connection.close()
+
+    @ignore_exceptions((ValueError, KeyError))
+    def _upload_new_measurement(self, wrh_client, data):
+        measurement = Measurement(client_id=wrh_client.id,
+                                  module_id=data['module_id'],
+                                  timestamp=datetime.strptime(data['date'], '%Y-%m-%d %H:%M:%S'),
+                                  # e.g. 2017-01-01 12:00:00
+                                  data=data['measurement'])
+        dedicated_model = self.wrh_modules.get(data['module_type'])
+        self.session.add(dedicated_model.get_object(measurement) if dedicated_model else measurement)
+        self.session.commit()
 
     def _update_module_info(self, client_id, module_id, module_type, module_name):
         module = self.session.query(Module).filter(Module.id == module_id, Module.client_id == client_id).first()
