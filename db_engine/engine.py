@@ -1,4 +1,5 @@
 import json
+import signal
 import socket
 
 from datetime import datetime
@@ -9,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from db_engine import Base
 from db_engine.constants import DB_CONFIG_FILE
-from db_engine.wrh_client import WRHClient, Measurement
+from db_engine.models import WRHClient, Measurement, Module
 from utils.decorators import with_open, in_thread
 from utils.io import log, Color, wrh_input, non_empty_positive_numeric_input
 from utils.sockets import wait_bind_socket, await_connection
@@ -35,8 +36,13 @@ class DBEngine:
         if not self.wrh_clients:
             log('No point in running while there are no clients configured!', Color.WARNING)
         else:
+            self._should_end = False
+            log('Listening for incoming connections on port {}'.format(self.port))
+            signal.signal(signal.SIGINT, self._sigint_handler)
             # TODO: Start tornado server
             self._await_connections()
+            log('Stopping work')
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
             # TODO: Stop everything
 
     def run_interactive(self):
@@ -70,7 +76,7 @@ class DBEngine:
         predicate = lambda: self._should_end is False
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        bind_result = wait_bind_socket(self.socket, '', self.port, 10, predicate=predicate,
+        bind_result = wait_bind_socket(self.socket, '', self.port, sleep=10, retries=5, predicate=predicate,
                                        error_message='Unable to bind to port {}'.format(self.port))
         if bind_result:
             self.socket.listen(5)
@@ -82,15 +88,24 @@ class DBEngine:
         log('New connection from {} who sent: {}'.format(address, data))
         wrh_client = self.wrh_clients.get(data['token'])
         if wrh_client:
+            self._update_module_info(wrh_client.id, data['module_id'], data['module_type'], data['module_name'])
             measurement = Measurement(client_id=wrh_client.id,
-                                      module_type=data['module_type'],
                                       module_id=data['module_id'],
                                       timestamp=datetime.strptime(data['date'], '%Y-%m-%d %H:%M:%S'),
                                       # e.g. 2017-01-01 12:00:00
                                       data=data['measurement'])
             self.session.add(measurement)
             self.session.commit()
-        connection.close()  # TODO: Await more data instead of closing?
+        connection.close()
+
+    def _update_module_info(self, client_id, module_id, module_type, module_name):
+        module = self.session.query(Module).filter(Module.id == module_id, Module.client_id == client_id).first()
+        if not module:
+            module = Module(id=module_id, client_id=client_id, type=module_type, name=module_name)
+            self.session.add(module)
+        elif module.name != module_name:
+            module.name = module_name
+        self.session.commit()
 
     def _add_new_client(self):
         log('\n*** Adding new WRH client ***')
@@ -100,8 +115,14 @@ class DBEngine:
         log('Sucess!\n\n', Color.GREEN)
 
     def _modify_client(self):
-        # TODO: Finish this function
-        pass
+        log('\n*** Existing clients ***')
+        [log('{client.id} --- {client.name}'.format(client=client), Color.BLUE) for client in self.wrh_clients.values()]
+        client_id = npinput(message='Id of client to edit: ')
+        to_edit = self.session.query(WRHClient).filter(WRHClient.id == client_id).first()
+        if to_edit:
+            to_edit.name = wrh_input(message='Input new name of the client: ')
+            self.session.commit()
+            log('Sucess!\n\n', Color.GREEN)
 
     def _delete_client(self):
         log('\n*** Existing clients ***')
@@ -112,6 +133,12 @@ class DBEngine:
             self.session.delete(to_remove)
             self.session.commit()
             log('Sucess!\n\n', Color.GREEN)
+
+    def _sigint_handler(self, *_):
+        self._should_end = True
+        if self.socket:
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
 
     @staticmethod
     def _generate_client_token(client_name):
