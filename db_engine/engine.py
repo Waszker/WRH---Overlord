@@ -17,7 +17,7 @@ from utils.sockets import wait_bind_socket, await_connection
 
 npinput = non_empty_positive_numeric_input
 
-
+# TODO: Scan for specific module db models, and import them before starting the main db engine.
 class DBEngine:
     def __init__(self, port, tornado_port):
         self.socket = None
