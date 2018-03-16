@@ -5,6 +5,7 @@ from modules.base import ModuleBase
 
 
 class DHT22(Base, ModuleBase):
+    # select to_char(avg(temperature), '99D99'), to_char(avg(humidity), '99D99'), timestamp::date from measurement_dht22 where client_id = 3 group by timestamp::date order by timestamp::date;
     WRHID = 'DHT22Module'
     __abstract__ = False
     __tablename__ = 'measurement_dht22'
