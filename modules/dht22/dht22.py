@@ -23,7 +23,7 @@ class DHT22(Base, ModuleBase):
     def get_object(cls, measurement_object):
         obj = measurement_object
         temp, hum = measurement_object.data['temperature'], measurement_object.data['humidity']
-        if not (temp and hum):
+        if temp is None or hum is None:
             raise ValueError('No point in storing dht22 measurement if both temperature and humidity values are None')
         return cls(id=obj.id, client_id=obj.client_id, module_id=obj.module_id, timestamp=obj.timestamp,
                    temperature=temp, humidity=hum)
