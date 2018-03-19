@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, Float
+from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, DECIMAL
 
 from db_engine import Base
 from modules.base import ModuleBase
@@ -12,8 +12,8 @@ class DHT22(Base, ModuleBase):
     client_id = Column(Integer, ForeignKey('wrh_client.id'), nullable=False, index=True)
     module_id = Column(Integer, nullable=False, index=True)
     timestamp = Column(TIMESTAMP, nullable=False)
-    temperature = Column(Float)
-    humidity = Column(Float)
+    temperature = Column(DECIMAL(precision=4, scale=2, asdecimal=False))
+    humidity = Column(DECIMAL(precision=4, scale=2, asdecimal=False))
 
     @classmethod
     def get_html(cls):
