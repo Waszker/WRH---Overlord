@@ -1,17 +1,16 @@
+import hashlib
 import json
 import signal
 import socket
-
 from datetime import datetime
 
-import hashlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from db_engine import Base, WRH_MODULES
 from db_engine.constants import DB_CONFIG_FILE
 from db_engine.models import WRHClient, Measurement, Module
-from utils.decorators import with_open, in_thread, ignore_exceptions
+from utils.decorators import with_open, in_thread, log_exceptions
 from utils.io import log, Color, wrh_input, non_empty_positive_numeric_input
 from utils.sockets import wait_bind_socket, await_connection
 
@@ -88,15 +87,17 @@ class DBEngine:
 
     @in_thread
     def _new_connection(self, connection, address):
-        data = json.loads(connection.recv(4096).decode('utf-8').replace('\0', ''))
-        log('New connection from {} who sent: {}'.format(address, data))
-        wrh_client = self.wrh_clients.get(data['token'])
-        if wrh_client:
-            self._update_module_info(wrh_client.id, data['module_id'], data['module_type'], data['module_name'])
-            self._upload_new_measurement(wrh_client, data)
-        connection.close()
+        try:
+            data = json.loads(connection.recv(4096).decode('utf-8').replace('\0', ''))
+            log('New connection from {} who sent: {}'.format(address, data))
+            wrh_client = self.wrh_clients.get(data['token'])
+            if wrh_client:
+                self._update_module_info(wrh_client.id, data['module_id'], data['module_type'], data['module_name'])
+                self._upload_new_measurement(wrh_client, data)
+        finally:
+            connection.close()
 
-    @ignore_exceptions((ValueError, KeyError))
+    @log_exceptions()
     def _upload_new_measurement(self, wrh_client, data):
         measurement = Measurement(client_id=wrh_client.id,
                                   module_id=data['module_id'],

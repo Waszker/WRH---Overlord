@@ -17,6 +17,9 @@ class DHT22(Base, ModuleBase):
 
     @classmethod
     def get_html(cls):
+        repr = """<div>
+                    </div>"""
+        return ''
         pass
 
     @classmethod
