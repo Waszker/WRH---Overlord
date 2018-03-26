@@ -16,6 +16,17 @@ from utils.sockets import wait_bind_socket, await_connection
 
 npinput = non_empty_positive_numeric_input
 
+
+def with_session(method):
+    def inner(self, *args, **kwargs):
+        session = self.sessionmaker()
+        results = method(self, session, *args, **kwargs)
+        session.commit()
+        return results
+
+    return inner
+
+
 # TODO: Scan for specific module db models, and import them before starting the main db engine.
 class DBEngine:
     def __init__(self, port, tornado_port):
@@ -31,7 +42,8 @@ class DBEngine:
     @property
     def wrh_clients(self):
         # TODO: Check if this is optimal way of obtaining client objects? Are those cached within session?
-        clients = self.session.query(WRHClient).all()
+        session = self.sessionmaker()
+        clients = session.query(WRHClient).all()
         return {c.token: c for c in clients}
 
     def start_work(self):
@@ -60,7 +72,8 @@ class DBEngine:
             choice = wrh_input(message='> ', input_type=int, sanitizer=lambda x: 1 <= x <= len(choices),
                                allowed_exceptions=(ValueError,))
             choices[choice][1]()  # run selected procedure
-            self.session.commit()
+            if choice in (1, 2, 3):
+                log('Sucess!\n\n', Color.GREEN)
 
     @with_open(DB_CONFIG_FILE, 'r', ())
     def _read_db_configuration(self, _file_=None):
@@ -70,7 +83,7 @@ class DBEngine:
             self.db_engine = create_engine('{dialect}://{username}:{password}@{host}:{port}/{database}'.format(
                 **db_configuration))
             Base.metadata.create_all(self.db_engine)
-            self.session = sessionmaker(bind=self.db_engine)()
+            self.sessionmaker = sessionmaker(bind=self.db_engine)
         except (IOError, KeyError) as e:
             log('Error when trying to read db configuration: {}'.format(e), Color.FAIL)
             raise
@@ -98,51 +111,49 @@ class DBEngine:
             connection.close()
 
     @log_exceptions()
-    def _upload_new_measurement(self, wrh_client, data):
+    @with_session
+    def _upload_new_measurement(self, session, wrh_client, data):
         measurement = Measurement(client_id=wrh_client.id,
                                   module_id=data['module_id'],
                                   timestamp=datetime.strptime(data['date'], '%Y-%m-%d %H:%M:%S'),
                                   # e.g. 2017-01-01 12:00:00
                                   data=data['measurement'])
         dedicated_model = self.wrh_modules.get(data['module_type'])
-        self.session.add(dedicated_model.get_object(measurement) if dedicated_model else measurement)
-        self.session.commit()
+        session.add(dedicated_model.get_object(measurement) if dedicated_model else measurement)
 
-    def _update_module_info(self, client_id, module_id, module_type, module_name):
-        module = self.session.query(Module).filter(Module.id == module_id, Module.client_id == client_id).first()
+    @with_session
+    def _update_module_info(self, session, client_id, module_id, module_type, module_name):
+        module = session.query(Module).filter(Module.id == module_id, Module.client_id == client_id).first()
         if not module:
             module = Module(id=module_id, client_id=client_id, type=module_type, name=module_name)
-            self.session.add(module)
+            session.add(module)
         elif module.name != module_name:
             module.name = module_name
-        self.session.commit()
 
-    def _add_new_client(self):
+    @with_session
+    def _add_new_client(self, session):
         log('\n*** Adding new WRH client ***')
         client_name = wrh_input(message='Input name of new client: ')
         client = WRHClient(name=client_name, token=self._generate_client_token(client_name))
-        self.session.add(client)
-        log('Sucess!\n\n', Color.GREEN)
+        session.add(client)
 
-    def _modify_client(self):
+    @with_session
+    def _modify_client(self, session):
         log('\n*** Existing clients ***')
         [log('{client.id} --- {client.name}'.format(client=client), Color.BLUE) for client in self.wrh_clients.values()]
         client_id = npinput(message='Id of client to edit: ')
-        to_edit = self.session.query(WRHClient).filter(WRHClient.id == client_id).first()
+        to_edit = session.query(WRHClient).filter(WRHClient.id == client_id).first()
         if to_edit:
             to_edit.name = wrh_input(message='Input new name of the client: ')
-            self.session.commit()
-            log('Sucess!\n\n', Color.GREEN)
 
-    def _delete_client(self):
+    @with_session
+    def _delete_client(self, session):
         log('\n*** Existing clients ***')
         [log('{client.id} --- {client.name}'.format(client=client), Color.BLUE) for client in self.wrh_clients.values()]
         client_id = npinput(message='Id of client to remove: ')
-        to_remove = self.session.query(WRHClient).filter(WRHClient.id == client_id).first()
+        to_remove = session.query(WRHClient).filter(WRHClient.id == client_id).first()
         if to_remove:
-            self.session.delete(to_remove)
-            self.session.commit()
-            log('Sucess!\n\n', Color.GREEN)
+            session.delete(to_remove)
 
     def _sigint_handler(self, *_):
         self._should_end = True
