@@ -16,11 +16,51 @@ class DHT22(Base, ModuleBase):
     humidity = Column(DECIMAL(precision=4, scale=2, asdecimal=False))
 
     @classmethod
-    def get_html(cls):
-        repr = """<div>
-                    </div>"""
-        return ''
-        pass
+    def get_html(cls, *args, **kwargs):
+        html_repr = """
+        <div>
+            <canvas id="dht22Chart{id}" width="640" height="480"></canvas>
+            <script>
+            var ctx = document.getElementById("dht22Chart{id}").getContext('2d');
+            var myChart = new Chart(ctx, {{
+                type: 'line',
+                data: {data},
+                options: {options}
+            }});
+            </script>
+        </div>
+        """.format(id=id, data=cls.get_chart_data(*args, **kwargs), options='{}')
+        return html_repr
+
+    @classmethod
+    def get_chart_data(cls, session, client_id, from_date, until_date):
+        data = session.execute(cls.get_monthly_average_query(), {'client_id': client_id, 'from_date': from_date,
+                                                                 'until_date': until_date}).fetchall()
+        dates, temp_data, hum_data = [], [], []
+        for temp, hum, date in data:
+            temp_data.append(str(temp))
+            hum_data.append(str(hum))
+            dates.append(str(date))
+        formatted = """
+        {{
+            "labels":[{month_list}],
+            "datasets":[
+            {{"label":"temperature","data":[{temp_data}],"borderColor":rgb(175,92,22)}},
+            {{"label":"humidity","data":[{hum_data}],"borderColor":rgb(50,50,192)}}
+            ]
+        }}
+        """.format(month_list=','.join(dates), temp_data=','.join(temp_data), hum_data=','.join(hum_data))
+        return formatted
+
+    @classmethod
+    def get_monthly_average_query(cls):
+        query = """
+        SELECT CAST(avg(temperature) AS NUMERIC(4, 2)), CAST(avg(humidity) AS NUMERIC(4, 2)), timestamp::DATE
+        FROM {table_name}
+        WHERE client_id = :client_id and timestamp >= :from_date and timestamp <= :until_date
+        GROUP BY timestamp::DATE ORDER BY timestamp::DATE
+        """.format(table_name=cls.__tablename__)
+        return query
 
     @classmethod
     def get_object(cls, measurement_object):

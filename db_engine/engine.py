@@ -20,8 +20,11 @@ npinput = non_empty_positive_numeric_input
 def with_session(method):
     def inner(self, *args, **kwargs):
         session = self.sessionmaker()
-        results = method(self, session, *args, **kwargs)
-        session.commit()
+        try:
+            results = method(self, session, *args, **kwargs)
+            session.commit()
+        finally:
+            session.close()
         return results
 
     return inner
@@ -43,7 +46,10 @@ class DBEngine:
     def wrh_clients(self):
         # TODO: Check if this is optimal way of obtaining client objects? Are those cached within session?
         session = self.sessionmaker()
-        clients = session.query(WRHClient).all()
+        try:
+            clients = session.query(WRHClient).all()
+        finally:
+            session.close()
         return {c.token: c for c in clients}
 
     def start_work(self):
