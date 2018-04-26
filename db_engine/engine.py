@@ -10,6 +10,8 @@ from sqlalchemy.orm import sessionmaker
 from db_engine import Base, WRH_MODULES
 from db_engine.constants import DB_CONFIG_FILE
 from db_engine.models import WRHClient, Measurement, Module
+from db_engine.overlord_decorators import with_session
+from db_engine.tornado.server import TornadoServer
 from utils.decorators import with_open, in_thread, log_exceptions
 from utils.io import log, Color, wrh_input, non_empty_positive_numeric_input
 from utils.sockets import wait_bind_socket, await_connection
@@ -17,30 +19,16 @@ from utils.sockets import wait_bind_socket, await_connection
 npinput = non_empty_positive_numeric_input
 
 
-def with_session(method):
-    def inner(self, *args, **kwargs):
-        session = self.sessionmaker()
-        try:
-            results = method(self, session, *args, **kwargs)
-            session.commit()
-        finally:
-            session.close()
-        return results
-
-    return inner
-
-
-# TODO: Scan for specific module db models, and import them before starting the main db engine.
 class DBEngine:
     def __init__(self, port, tornado_port):
         self.socket = None
         self.port = port
-        self.tornado_port = tornado_port
         self._should_end = False
         log('Following additional db models have been found: \n*{}'.format(
             '\n*'.join(str(m.__name__) for m in WRH_MODULES)), Color.BLUE)
         self.wrh_modules = {m.WRHID: m for m in WRH_MODULES}
         self._read_db_configuration()
+        self.tornado_server = TornadoServer(tornado_port, self.sessionmaker)
 
     @property
     def wrh_clients(self):
@@ -57,13 +45,11 @@ class DBEngine:
             log('No point in running while there are no clients configured!', Color.WARNING)
         else:
             self._should_end = False
-            log('Listening for incoming connections on port {}'.format(self.port))
             signal.signal(signal.SIGINT, self._sigint_handler)
-            # TODO: Start tornado server
+            self._start_tornado()
             self._await_connections()
             log('Stopping work')
             signal.signal(signal.SIGINT, signal.SIG_DFL)
-            # TODO: Stop everything
 
     def run_interactive(self):
         log('*** Existing clients ***')
@@ -101,8 +87,13 @@ class DBEngine:
         bind_result = wait_bind_socket(self.socket, '', self.port, sleep=10, retries=5, predicate=predicate,
                                        error_message='Unable to bind to port {}'.format(self.port))
         if bind_result:
+            log('Listening for incoming connections on port {}'.format(self.port))
             self.socket.listen(5)
             await_connection(self.socket, self._new_connection, predicate=predicate, close_connection=False)
+
+    @in_thread
+    def _start_tornado(self):
+        self.tornado_server.start()
 
     @in_thread
     def _new_connection(self, connection, address):
@@ -162,6 +153,7 @@ class DBEngine:
             session.delete(to_remove)
 
     def _sigint_handler(self, *_):
+        self.tornado_server.stop()
         self._should_end = True
         if self.socket:
             self.socket.shutdown(socket.SHUT_RDWR)

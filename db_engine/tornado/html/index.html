@@ -1,0 +1,92 @@
+{% autoescape None %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>WRH Overlord</title>
+
+    <!--Import Google Icon Font-->
+    <link href="{{ static_url('css/material_font.css') }}" rel="stylesheet">
+
+    <!--Import CSS styles-->
+    <link type="text/css" rel="stylesheet" href="{{ static_url('css/materialize.min.css') }}">
+    <link type="text/css" rel="stylesheet" href="{{ static_url('css/style.css') }}">
+
+    <!--Important Javascript functions-->
+    <script type="text/javascript" src="{{ static_url('js/script.js') }}"></script>
+    <script type="text/javascript" src="{{ static_url('js/Chart.min.js') }}"></script>
+
+</head>
+
+<body>
+<div id="wrapper">
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-wrapper grey darken-4">
+            <a class="brand-logo" href="/" style="margin-left: 30px; margin-right: 30px">WRH OVERLORD</a>
+            <a href="#" data-target="mobile-demo" class="sidenav-trigger"><i class="material-icons">menu</i></a>
+
+            <!-- Top Navigation: Left Menu -->
+            <ul class="right hide-on-med-and-down">
+                <li><a href="/?">SYSTEM</a></li>
+                {%for mclass in classes%}
+                <li>
+                    <a href="/?class={{mclass}}">{{mclass}}</a>
+                </li>
+                {%end%}
+            </ul>
+        </div>
+    </nav>
+    <ul class="sidenav" id="mobile-demo">
+        <li><a href="/?">SYSTEM</a></li>
+        {%for mclass in classes%}
+        <li>
+            <a href="/?class={{mclass}}">{{mclass}}</a>
+        </li>
+        {%end%}
+    </ul>
+
+    <!-- Page Content -->
+    <div id="page-wrapper" style="margin-left: auto; margin-right: auto; text-align: center">
+        <div class="container-fluid">
+
+            <div class="row-title">
+                <h3 class="page-header">
+                    {% if not requested_class %}
+                    Statistics
+                    {% else %}
+                    {{ requested_class.WRHID }}
+                    {% end %}
+                </h3>
+            </div>
+
+            <div style="width: 80%; margin-left: auto; margin-right: auto; text-align: center">
+                {% if not requested_modules %}
+                TODO: Show something here
+                {% else %}
+                    {% for m in requested_modules %}
+                        {{ requested_class.get_html(m) }}
+                    {% end %}
+                {% end %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Javascript scripts -->
+<script src="{{ static_url('js/jquery.min.js')}}"></script>
+<script type="text/javascript" src="{{ static_url('js/materialize.min.js') }}"></script>
+
+<script>
+    $(document).ready(function () {
+        $('.sidenav').sidenav();
+    });
+</script>
+
+</body>
+</html>

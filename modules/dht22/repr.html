@@ -1,10 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
-
-</body>
-</html>
+<div class="card-panel">
+    <h5>{name}</h5>
+    <div>
+        <img id="loading{id}" src="static/images/loading_boobies.gif" style="width: 180px;"/>
+        <canvas id="dht22Chart{id}" width="80%"></canvas>
+    </div>
+    <script>
+        function get_chart_data{id}() {{
+            postRequest("{wrhid}", "{request}", (response) => {{
+                document.getElementById("loading{id}").style.display = "none";
+                var ctx = document.getElementById("dht22Chart{id}").getContext('2d');
+                var myChart = new Chart(ctx, {{
+                    type: 'line',
+                    data: JSON.parse(response),
+                    options: {{}}
+                }});
+            }});
+        }};
+        get_chart_data{id}();
+    </script>
+</div>
