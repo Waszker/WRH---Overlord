@@ -70,7 +70,7 @@ class TornadoServer:
     def start(self):
         if not self.server:
             asyncio.set_event_loop(asyncio.new_event_loop())
-            log('Starting Tornado server on port {}'.format(self.port))
+            log(f'Starting Tornado server on port {self.port}')
             self.server = self.application.listen(self.port)
             tornado.ioloop.IOLoop.instance().start()
 

@@ -67,7 +67,16 @@
 
             <div style="width: 80%; margin-left: auto; margin-right: auto; text-align: center">
                 {% if not requested_modules %}
-                TODO: Show something here
+                {% import datetime %}
+                {% from utils.system_info import get_uptime, get_cpu_temp %}
+                <div>
+                     <div id="systemDiv">
+                         {{ f'<b>Date</b>: {datetime.datetime.now():%d-%m-%Y}<br/>' }}
+                         {{ f'<b>Hour</b>: {datetime.datetime.now():%H:%M}<br/>' }}
+                         {{ f'<b>Uptime</b>: {get_uptime()}<br/>' }}
+                         {{ f'<b>CPU temperature</b>: {get_cpu_temp()}&deg;C<br/>' }}
+                     </div>
+                 </div>
                 {% else %}
                     {% for m in requested_modules %}
                         {{ requested_class.get_html(m) }}

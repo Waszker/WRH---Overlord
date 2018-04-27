@@ -12,7 +12,7 @@ Base = declarative_base()
 
 def __scan_and_load_wrh_modules(path):
     if not os.path.exists(path):
-        log('Path {} for additional WRH modules does not exist'.format(path))
+        log(f'Path {path} for additional WRH modules does not exist')
         return ()
     classes = []
     for mdir in (e for e in os.listdir(path) if e[0] != '.' and os.path.isdir(pjoin(path, e))):
