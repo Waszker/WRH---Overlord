@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, DECIMAL
 from tornado_sqlalchemy import as_future
@@ -7,6 +7,7 @@ from tornado_sqlalchemy import as_future
 from db_engine import Base
 from db_engine.models import Module, Measurement
 from modules.base import ModuleBase
+from utils.io import log
 
 
 class DHT22(Base, ModuleBase):
@@ -31,12 +32,17 @@ class DHT22(Base, ModuleBase):
     @classmethod
     async def parse_request(cls, session, request_string: str) -> str:
         dates, temp_data, hum_data = [], [], []
-        module_id, client_id = request_string.split(',')  # TODO: Beware of unpacking error!
-        # TODO: Add possibility to change from_date and until_date values from user interface
-        data = await asyncio.wrap_future(as_future(session.execute(cls._get_monthly_average_query(),
+        request_string += ',' * (max(3 - request_string.count(','), 0))  # Preventing unpacking error
+        module_id, client_id, from_date, until_date = request_string.split(',')
+        from_date = cls.__parse_date_string(from_date) or datetime(year=2000, month=1, day=1)
+        until_date = cls.__parse_date_string(until_date) or datetime.now()
+        query = cls._get_weekly_detailed_query() if (until_date - from_date) <= timedelta(days=7) \
+            else cls._get_monthly_average_query()
+        data = await asyncio.wrap_future(as_future(session.execute(query,
                                                                    {'module_id': module_id, 'client_id': client_id,
-                                                                    'from_date': datetime(year=2000, month=1, day=1),
-                                                                    'until_date': datetime.now()}).fetchall))
+                                                                    'from_date': from_date,
+                                                                    'until_date': until_date + timedelta(days=1)
+                                                                    }).fetchall))
         for temp, hum, date in data:
             temp_data.append(str(temp))
             hum_data.append(str(hum))
@@ -70,3 +76,21 @@ class DHT22(Base, ModuleBase):
         GROUP BY timestamp::DATE ORDER BY timestamp::DATE
         """
         return query
+
+    @classmethod
+    def _get_weekly_detailed_query(cls) -> str:
+        query = f"""
+        SELECT temperature, humidity, timestamp
+        FROM {cls.__tablename__}
+        WHERE client_id = :client_id and timestamp >= :from_date and timestamp <= :until_date
+        ORDER BY timestamp
+        """
+        return query
+
+    @staticmethod
+    def __parse_date_string(date_string):
+        try:
+            date = datetime.strptime(date_string, '%d-%m-%Y')
+        except ValueError:
+            date = None
+        return date
