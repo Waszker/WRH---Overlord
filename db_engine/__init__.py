@@ -4,7 +4,6 @@ from os.path import join as pjoin
 from sqlalchemy.ext.declarative import declarative_base
 
 from db_engine.constants import ADDITIONAL_DB_MODULES_PATH
-from modules.base import ModuleBase
 from utils.io import log
 
 Base = declarative_base()
@@ -14,6 +13,8 @@ def __scan_and_load_wrh_modules(path):
     if not os.path.exists(path):
         log(f'Path {path} for additional WRH modules does not exist')
         return ()
+
+    from modules.base import ModuleBase
     classes = []
     for mdir in (e for e in os.listdir(path) if e[0] != '.' and os.path.isdir(pjoin(path, e))):
         _path = pjoin(path, mdir)

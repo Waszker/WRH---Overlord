@@ -9,6 +9,14 @@
     width: 100%
 }
 
+.container {
+    display: flex;
+    margin: auto;
+    width: -webkit-fit-content;
+    width: -moz-fit-content;
+    width: fit-content;
+}
+
 .row-title {
     padding-bottom: 9px;
     margin: 40px 0 20px;
@@ -29,4 +37,8 @@
     width: 80%;
     font-size: 1px; /* IE 6 */
     margin: auto;
+}
+
+.datepicker {
+    color: black;
 }

@@ -1,21 +1,40 @@
 <div class="card-panel">
     <h5>{name}</h5>
     <div>
+        <div class="container">
+            Od: <input type="text" class="datepicker" id="date_from_dht22_{id}" />
+            Do: <input type="text" class="datepicker"  id="date_until_dht22_{id}" />
+        </div>
+        <button class="waves-effect waves-light btn grey darken-3" onclick="get_chart_data{id}()">Wczytaj</button>
+    </div>
+    <br />
+    <div>
         <img id="loading{id}" src="static/images/loading_spinner.gif" style="width: 180px;"/>
-        <canvas id="dht22Chart{id}" width="80%"></canvas>
+        <canvas id="dht22ChartCanvas{id}" width="80%" style="display: none"></canvas>
     </div>
     <script>
+        var dht22Chart{id};
         function get_chart_data{id}() {{
-            postRequest("{wrhid}", "{request}", (response) => {{
+            var fromDate = document.getElementById("date_from_dht22_{id}").value;
+            var untilDate = document.getElementById("date_until_dht22_{id}").value;
+            var request = [{request}, fromDate, untilDate].join(',');
+            postRequest("{wrhid}", request, (response) => {{
                 document.getElementById("loading{id}").style.display = "none";
-                var ctx = document.getElementById("dht22Chart{id}").getContext('2d');
-                var myChart = new Chart(ctx, {{
+                document.getElementById("dht22ChartCanvas{id}").style.display = "inline";
+                var ctx = document.getElementById("dht22ChartCanvas{id}").getContext('2d');
+                var oldChart = dht22Chart{id};
+                dht22Chart{id} = new Chart(ctx, {{
                     type: 'line',
                     data: JSON.parse(response),
                     options: {{}}
                 }});
+                if (typeof oldChart !== 'undefined') oldChart.destroy();
             }});
         }};
         get_chart_data{id}();
+
+        $(document).ready(function () {{
+            $('.datepicker').datepicker({{format: 'dd-mm-yyyy', showClearBtn: true}});
+        }});
     </script>
 </div>
