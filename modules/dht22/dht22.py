@@ -5,6 +5,7 @@ from sqlalchemy import Column, Integer, TIMESTAMP, ForeignKey, DECIMAL
 from tornado_sqlalchemy import as_future
 
 from db_engine import Base
+from db_engine.models import Module, Measurement
 from modules.base import ModuleBase
 
 
@@ -20,15 +21,15 @@ class DHT22(Base, ModuleBase):
     humidity = Column(DECIMAL(precision=4, scale=2, asdecimal=False))
 
     @classmethod
-    def get_html(cls, module):
+    def get_html(cls, module: Module) -> str:
         if not cls.html_repr:
             with open('modules/dht22/repr.html', 'r') as f:
                 cls.html_repr = f.read()
-        return cls.html_repr.format(id='{}{}'.format(module.id, module.client_id), name=module.name,
-                                    request='{0.id},{0.client_id}'.format(module), wrhid=cls.WRHID)
+        return cls.html_repr.format(id=f'{module.id}{module.client_id}', name=module.name,
+                                    request=f'{module.id},{module.client_id}', wrhid=cls.WRHID)
 
     @classmethod
-    async def parse_request(cls, session, request_string):
+    async def parse_request(cls, session, request_string: str) -> str:
         dates, temp_data, hum_data = [], [], []
         module_id, client_id = request_string.split(',')  # TODO: Beware of unpacking error!
         # TODO: Add possibility to change from_date and until_date values from user interface
@@ -39,7 +40,7 @@ class DHT22(Base, ModuleBase):
         for temp, hum, date in data:
             temp_data.append(str(temp))
             hum_data.append(str(hum))
-            dates.append('"{}"'.format(date))
+            dates.append(f'"{date}"')
         formatted = """
                 {{
                     "labels":[{month_list}],
@@ -52,7 +53,7 @@ class DHT22(Base, ModuleBase):
         return formatted
 
     @classmethod
-    def get_object(cls, measurement_object):
+    def get_object(cls, measurement_object: Measurement) -> ModuleBase:
         obj = measurement_object
         temp, hum = measurement_object.data['temperature'], measurement_object.data['humidity']
         if temp is None or hum is None:
@@ -61,11 +62,11 @@ class DHT22(Base, ModuleBase):
                    temperature=temp, humidity=hum)
 
     @classmethod
-    def _get_monthly_average_query(cls):
-        query = """
+    def _get_monthly_average_query(cls) -> str:
+        query = f"""
         SELECT CAST(avg(temperature) AS NUMERIC(4, 2)), CAST(avg(humidity) AS NUMERIC(4, 2)), timestamp::DATE
-        FROM {table_name}
+        FROM {cls.__tablename__}
         WHERE client_id = :client_id and timestamp >= :from_date and timestamp <= :until_date
         GROUP BY timestamp::DATE ORDER BY timestamp::DATE
-        """.format(table_name=cls.__tablename__)
+        """
         return query

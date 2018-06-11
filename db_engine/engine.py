@@ -32,7 +32,6 @@ class DBEngine:
 
     @property
     def wrh_clients(self):
-        # TODO: Check if this is optimal way of obtaining client objects? Are those cached within session?
         session = self.sessionmaker()
         try:
             clients = session.query(WRHClient).all()
